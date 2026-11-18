@@ -27,6 +27,12 @@ h1 span{color:var(--acc)}
 .upd:disabled{cursor:default;color:var(--mut)}
 .upd svg{width:17px;height:17px;fill:none;stroke:var(--acc);stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
 .upd.busy svg{animation:spin 1s linear infinite}
+.ukey{padding:7px 9px;margin-left:-10px}
+.ukey svg{stroke:var(--mut)}
+.ukey:hover svg{stroke:var(--fg)}
+.toast{display:flex;align-items:center;gap:6px 14px;flex-wrap:wrap}
+.toast[hidden]{display:none}
+.toast button{background:none;border:0;padding:0;color:var(--acc);font:inherit;font-weight:600;cursor:pointer;white-space:nowrap}
 @keyframes spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.upd.busy svg{animation:none}}
 .toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:50;max-width:min(92vw,520px);background:#26262c;color:var(--fg);border:1px solid #34343b;border-radius:12px;padding:10px 16px;font-size:14px;line-height:1.45;box-shadow:0 10px 30px rgba(0,0,0,.5)}
@@ -233,7 +239,7 @@ html.nodlg dialog[open]{position:fixed;top:50%;left:50%;transform:translate(-50%
         <button class="tab" data-t="wshows">Series<b id="cws"></b></button>
         <button class="tab" data-t="wmovies">Películas<b id="cwm"></b></button>
       </div>
-      <div class="hright"><span class="net" id="net" hidden></span><button class="upd" id="upd" title="Traer de Plex lo último de tu biblioteca"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v5h-5"/></svg><span>Actualizar</span></button></div>
+      <div class="hright"><span class="net" id="net" hidden></span><button class="upd" id="upd" title="Traer de Plex lo último de tu biblioteca"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v5h-5"/></svg><span>Actualizar</span></button><button class="upd ukey" id="tokbtn" title="Cambiar token de Plex" aria-label="Cambiar token de Plex"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l3 3M14 9l2 2"/></svg></button></div>
     </div>
     <div class="tools">
       <input type="search" id="q" placeholder="Buscar por título, actor o director">
@@ -656,10 +662,12 @@ function setTab(t){
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>setTab(b.dataset.t));
 ['q','f','g','o','wo'].forEach(id=>$(id).addEventListener('input',render));
 let msgT=0;
-function msg(t,keep){
+// keep: no ocultar solo; fix: añade el botón «Cambiar token» (para errores de conexión)
+function msg(t,keep,fix){
   const el=$('msg');el.textContent=t||'';el.hidden=!t;
+  if(fix){const b=document.createElement('button');b.textContent='Cambiar token';b.onclick=()=>{el.hidden=true;askToken()};el.append(b)}
   if($('tokdlg').open)$('tmsg').textContent=t||'';
-  clearTimeout(msgT);if(t&&!keep)msgT=setTimeout(()=>{el.hidden=true},7000);
+  clearTimeout(msgT);if(t&&!keep)msgT=setTimeout(()=>{el.hidden=true},fix?15000:7000);
 }
 /* Busca en plex.tv la dirección segura (https://…plex.direct) de tu servidor.
    Hace falta cuando la página se abre desde una web https (por ejemplo en el móvil). */
@@ -694,6 +702,7 @@ $('doSync').onclick=()=>{
 };
 $('tok').addEventListener('keydown',e=>{if(e.key==='Enter')$('doSync').click()});
 $('upd').onclick=()=>S.token?runSync():askToken();
+$('tokbtn').onclick=()=>askToken();
 let syncing=false;
 async function runSync(){
   if(syncing)return;syncing=true;
@@ -706,11 +715,11 @@ async function doSync(){
     msg('Buscando tu servidor Plex…',true);
     try{
       const f=await plexDiscover(S.token);
-      if(!f)return msg('No se ha podido conectar con tu Plex. Comprueba que estás en el wifi de casa y que en Plex → Ajustes → Red las conexiones seguras están en «Preferidas».');
+      if(!f)return msg('No se ha podido conectar con tu Plex. Comprueba que estás en el wifi de casa y que en Plex → Ajustes → Red las conexiones seguras están en «Preferidas». Si el token no es el correcto, cámbialo.',false,true);
       srv=f.uri;S.token=f.token;
     }catch(e){
       if(e.message==='token'){msg('');return askToken('Plex no acepta ese token. Revísalo.')}
-      return msg('No se pudo contactar con plex.tv ('+e.message+'). Revisa la conexión a internet.');
+      return msg('No se pudo contactar con plex.tv ('+e.message+'). Revisa la conexión a internet o el token.',false,true);
     }
   }
   S.server=srv;save();
@@ -729,7 +738,7 @@ async function doSync(){
     if(/HTTP 401/.test(err.message)){msg('');return askToken('Plex no acepta ese token. Revísalo.')}
     // si falla una dirección guardada, a la próxima se vuelve a buscar
     if(location.protocol==='https:'||/plex\.direct/.test(S.server)){S.server='';save()}
-    msg('No se pudo conectar con Plex ('+err.message+'). Comprueba que estás en el wifi de casa y vuelve a pulsar Actualizar.');
+    msg('No se pudo conectar con Plex ('+err.message+'). Comprueba que estás en el wifi de casa o que el token es correcto.',false,true);
   }
 }
 /* ---------- Modo compartido ----------
